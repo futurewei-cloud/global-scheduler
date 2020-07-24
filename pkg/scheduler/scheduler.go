@@ -18,17 +18,22 @@ limitations under the License.
 package scheduler
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"time"
+	// TODO: Try to find an official way to import this module
+	"github.com/golang-collections/go-datastructures/queue"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	appsinformers "k8s.io/client-go/informers/apps/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	policyinformers "k8s.io/client-go/informers/policy/v1beta1"
@@ -53,6 +58,9 @@ const (
 	SchedulerError = "SchedulerError"
 )
 
+// Global variable storing token which avoid generating token every time
+var tokenMap = make(map[string]string)
+
 // Scheduler watches for new unscheduled pods. It attempts to find
 // nodes that they fit on and writes bindings back to the api server.
 type Scheduler struct {
@@ -70,6 +78,14 @@ type schedulerOptions struct {
 	disablePreemption              bool
 	percentageOfNodesToScore       int32
 	bindTimeoutSeconds             int64
+}
+
+type server struct {
+	Name           string              `json:"name"`
+	ImageRef       string              `json:"imageRef"`
+	FlavorRef      string              `json:"flavorRef"`
+	Networks       []map[string]string `json:"networks"`
+	SecurityGroups []map[string]string `json:"security_groups"`
 }
 
 // Option configures a Scheduler
@@ -257,7 +273,8 @@ func (sched *Scheduler) Run() {
 		return
 	}
 
-	go wait.Until(sched.scheduleOne, 0, sched.config.StopEverything)
+	// go wait.Until(sched.scheduleOne, 0, sched.config.StopEverything)
+	go wait.Until(sched.globalScheduleOne, 0, sched.config.StopEverything)
 }
 
 // Config returns scheduler's config pointer. It is exposed for testing purposes.
@@ -288,6 +305,11 @@ func (sched *Scheduler) schedule(pod *v1.Pod, pluginContext *framework.PluginCon
 		sched.recordSchedulingFailure(pod, err, v1.PodReasonUnschedulable, err.Error())
 		return core.ScheduleResult{}, err
 	}
+	return result, err
+}
+
+func (sched *Scheduler) globalSchedule(pod *v1.Pod) (core.ScheduleResult, error) {
+	result, err := sched.config.Algorithm.GlobalSchedule(pod)
 	return result, err
 }
 
@@ -414,13 +436,16 @@ func (sched *Scheduler) assume(assumed *v1.Pod, host string) error {
 // bind binds a pod to a given node defined in a binding object.  We expect this to run asynchronously, so we
 // handle binding metrics internally.
 func (sched *Scheduler) bind(assumed *v1.Pod, b *v1.Binding) error {
-	bindingStart := time.Now()
+	// bindingStart := time.Now()
 	// If binding succeeded then PodScheduled condition will be updated in apiserver so that
 	// it's atomic with setting host.
 	err := sched.config.GetBinder(assumed).Bind(b)
 	if finErr := sched.config.SchedulerCache.FinishBinding(assumed); finErr != nil {
 		klog.Errorf("scheduler cache FinishBinding failed: %v", finErr)
+	} else {
+		klog.V(3).Infof("scheduler FinishBinding pass")
 	}
+
 	if err != nil {
 		klog.V(1).Infof("Failed to bind pod: %v/%v/%v", assumed.Tenant, assumed.Namespace, assumed.Name)
 		if err := sched.config.SchedulerCache.ForgetPod(assumed); err != nil {
@@ -429,20 +454,277 @@ func (sched *Scheduler) bind(assumed *v1.Pod, b *v1.Binding) error {
 		sched.recordSchedulingFailure(assumed, err, SchedulerError,
 			fmt.Sprintf("Binding rejected: %v", err))
 		return err
+	} else {
+		klog.V(3).Infof("scheduler binding pass")
 	}
 
-	metrics.BindingLatency.Observe(metrics.SinceInSeconds(bindingStart))
-	metrics.DeprecatedBindingLatency.Observe(metrics.SinceInMicroseconds(bindingStart))
-	metrics.SchedulingLatency.WithLabelValues(metrics.Binding).Observe(metrics.SinceInSeconds(bindingStart))
-	metrics.DeprecatedSchedulingLatency.WithLabelValues(metrics.Binding).Observe(metrics.SinceInSeconds(bindingStart))
+	// metrics.BindingLatency.Observe(metrics.SinceInSeconds(bindingStart))
+	// metrics.DeprecatedBindingLatency.Observe(metrics.SinceInMicroseconds(bindingStart))
+	// metrics.SchedulingLatency.WithLabelValues(metrics.Binding).Observe(metrics.SinceInSeconds(bindingStart))
+	// metrics.DeprecatedSchedulingLatency.WithLabelValues(metrics.Binding).Observe(metrics.SinceInSeconds(bindingStart))
 	sched.config.Recorder.Eventf(assumed, v1.EventTypeNormal, "Scheduled", "Successfully assigned %v/%v/%v to %v", assumed.Tenant, assumed.Namespace, assumed.Name, b.Target.Name)
 	return nil
+}
+
+func requestToken(host string) (string, error) {
+	tokenRequestURL := "http://" + host + "/identity/v3/auth/tokens"
+
+	// TODO: Please don't hard code json data
+	tokenJsonData := `{"auth":{"identity":{"methods":["password"],"password":{"user":{"name":"admin","domain":{"id":"default"},"password":"secret"}}},"scope":{"project":{"name":"admin","domain":{"id":"default"}}}}}`
+
+	// Make HTTP Request
+	var tokenJsonDataBytes = []byte(tokenJsonData)
+	req, _ := http.NewRequest("POST", tokenRequestURL, bytes.NewBuffer(tokenJsonDataBytes))
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		klog.V(3).Infof("HTTP Post Token Request Failed: %v", err)
+		return "", err
+	}
+	klog.V(3).Infof("HTTP Post Request Succeeded")
+	defer resp.Body.Close()
+
+	// http.StatusCreated = 201
+	if resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("Instance capacity has reached its limit")
+	}
+
+	// Token is stored in header
+	respHeader := resp.Header
+	klog.V(3).Infof("HTTP Post Token: %v", respHeader["X-Subject-Token"][0])
+
+	return respHeader["X-Subject-Token"][0], nil
+}
+
+func serverCreate(host string, authToken string, manifest *v1.PodSpec) (string, error) {
+	serverCreateRequestURL := "http://" + host + "/compute/v2.1/servers"
+	serverStruct := server{
+		Name:      manifest.VirtualMachine.Name,
+		ImageRef:  manifest.VirtualMachine.Image,
+		FlavorRef: manifest.VirtualMachine.Resources.FlavorRef,
+		// Networks: []map[string]string{
+		// 	{"uuid": manifest.VPC},
+		// },
+		Networks: []map[string]string{
+			{"uuid": manifest.Nics[0].Uuid},
+		},
+		SecurityGroups: []map[string]string{
+			{"name": manifest.VirtualMachine.Scheduling.SecurityGroup[0].Name},
+		},
+	}
+	serverJson := map[string]server{}
+	serverJson["server"] = serverStruct
+	finalData, _ := json.Marshal(serverJson)
+	req, _ := http.NewRequest("POST", serverCreateRequestURL, bytes.NewBuffer(finalData))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Auth-Token", authToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		klog.V(3).Infof("HTTP Post Instance Request Failed: %v", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+	var instanceResponse map[string]interface{}
+	if err := json.Unmarshal(body, &instanceResponse); err != nil {
+		klog.V(3).Infof("Instance Create Response Unmarshal Failed")
+		return "", err
+	}
+
+	// http.StatusForbidden = 403
+	if resp.StatusCode == http.StatusForbidden {
+		return "", fmt.Errorf("Instance capacity has reached its limit")
+	}
+
+	if instanceResponse["server"] == nil {
+		return "", fmt.Errorf("Bad request for server create")
+	}
+	serverResponse := instanceResponse["server"].(map[string]interface{})
+	instanceID := serverResponse["id"].(string)
+
+	return instanceID, nil
+}
+
+func checkInstanceStatus(host string, authToken string, instanceID string) (string, error) {
+	instanceDetailsURL := "http://" + host + "/compute/v2.1/servers/" + instanceID
+	req, _ := http.NewRequest("GET", instanceDetailsURL, nil)
+	req.Header.Set("X-Auth-Token", authToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		klog.V(3).Infof("HTTP GET Instance Status Request Failed: %v", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+	var instanceDetailsResponse map[string]interface{}
+	if err := json.Unmarshal(body, &instanceDetailsResponse); err != nil {
+		klog.V(3).Infof("Instance Detail Response Unmarshal Failed")
+		return "", err
+	}
+
+	if instanceDetailsResponse["server"] == nil {
+		return "", fmt.Errorf("Bad request for instance status check")
+	}
+	serverResponse := instanceDetailsResponse["server"].(map[string]interface{})
+	instanceStatus := serverResponse["status"].(string)
+
+	return instanceStatus, nil
+}
+
+func deleteInstance(host string, authToken string, instanceID string) error {
+	instanceDetailsURL := "http://" + host + "/compute/v2.1/servers/" + instanceID
+	req, _ := http.NewRequest("DELETE", instanceDetailsURL, nil)
+	req.Header.Set("X-Auth-Token", authToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		klog.V(3).Infof("HTTP DELETE Instance Status Request Failed: %v", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	// http.StatusNoContent = 204
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("Bad request for HTTP DELETE instance request")
+	} else {
+		klog.V(3).Infof("HTTP DELETE Instance Status Request Success")
+		return nil
+	}
+}
+
+func tokenExpired(host string, authToken string) bool {
+	checkTokenURL := "http://" + host + "/identity/v3/auth/tokens"
+	req, _ := http.NewRequest("HEAD", checkTokenURL, nil)
+	req.Header.Set("X-Auth-Token", authToken)
+	req.Header.Set("X-Subject-Token", authToken)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		klog.V(3).Infof("HTTP Check Token Request Failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// http.StatusOK = 200
+	if resp.StatusCode != http.StatusOK {
+		klog.V(3).Infof("Token Expired")
+		return true
+	}
+	klog.V(3).Infof("Token Not Expired")
+	return false
+}
+
+func (sched *Scheduler) scheduleInstanceStatusCheck(host string, authToken string, instanceID string, pod *v1.Pod, scheduleResultQueue *queue.Queue, manifest *v1.PodSpec) {
+	instanceStatus, err := checkInstanceStatus(host, authToken, instanceID)
+	if err != nil {
+		return
+	}
+	count := 0
+	for {
+		if instanceStatus == "BUILD" {
+			klog.V(3).Infof("Instance Status: %v", instanceStatus)
+			count += 1
+			// Wait one minute for creating instance if instance status is BUILD
+			if count == 60 {
+				klog.V(3).Infof("Create Instance Timeout!")
+				err := deleteInstance(host, authToken, instanceID)
+				if err != nil {
+					klog.V(3).Infof("Instance Delete Failed!")
+				}
+				go sched.startScheduling(scheduleResultQueue, pod, tokenMap, manifest)
+				break
+			}
+			time.Sleep(2 * time.Second)
+			instanceStatus, err = checkInstanceStatus(host, authToken, instanceID)
+			if err != nil {
+				return
+			} else {
+				continue
+			}
+		} else if instanceStatus == "ERROR" {
+			klog.V(3).Infof("Instance Status: %v", instanceStatus)
+			// Send delete instance request
+			err := deleteInstance(host, authToken, instanceID)
+			if err != nil {
+				klog.V(3).Infof("Instance Delete Failed!")
+			}
+			go sched.startScheduling(scheduleResultQueue, pod, tokenMap, manifest)
+		} else if instanceStatus == "ACTIVE" {
+			klog.V(3).Infof("Instance Status: %v", instanceStatus)
+			sched.config.PodPhaseUpdater.Update(pod, v1.PodRunning)
+		}
+		break
+	}
+}
+
+func scheduleResultEnqueue(scheduleResultQueue *queue.Queue, scheduleResult core.ScheduleResult) {
+	scheduleResultQueue.Put(scheduleResult.SuggestedHost)
+}
+
+func (sched *Scheduler) scheduleResultDequeue(scheduleResultQueue *queue.Queue, tokenMap map[string]string, manifest *v1.PodSpec, pod *v1.Pod) {
+	res, _ := scheduleResultQueue.Get(1)
+	host := fmt.Sprintf("%v", res[0])
+
+	authToken, exist := tokenMap[host]
+	if !exist || tokenExpired(host, authToken) {
+		// Post Request a new token
+		newToken, err := requestToken(host)
+		if err != nil {
+			klog.V(3).Infof("Token Request Failed.")
+			return
+		}
+		authToken = newToken
+		// Update tokenMap
+		tokenMap[host] = authToken
+	}
+
+	instanceID, err := serverCreate(host, authToken, manifest)
+	if err != nil {
+		klog.V(3).Infof("Server create failed")
+		return
+	}
+	klog.V(3).Infof("Instance ID: %v", instanceID)
+
+	go sched.scheduleInstanceStatusCheck(host, authToken, instanceID, pod, scheduleResultQueue, manifest)
+}
+
+func (sched *Scheduler) startScheduling(scheduleResultQueue *queue.Queue, pod *v1.Pod, tokenMap map[string]string, manifest *v1.PodSpec) {
+	scheduleResult, _ := sched.globalSchedule(pod)
+	go scheduleResultEnqueue(scheduleResultQueue, scheduleResult)
+	go sched.scheduleResultDequeue(scheduleResultQueue, tokenMap, manifest, pod)
+}
+
+func (sched *Scheduler) globalScheduleOne() {
+	// 1. Get the Pod to be scheduled from the queue
+	pod := sched.config.NextPod()
+	// pod could be nil when schedulerQueue is closed
+	if pod == nil || pod.Status.Phase == v1.PodRunning {
+		return
+	}
+	if pod.DeletionTimestamp != nil {
+		sched.config.Recorder.Eventf(pod, v1.EventTypeWarning, "FailedScheduling", "skip schedule deleting pod: %v/%v/%v", pod.Tenant, pod.Namespace, pod.Name)
+		klog.V(3).Infof("Skip schedule deleting pod: %v/%v/%v", pod.Tenant, pod.Namespace, pod.Name)
+		return
+	}
+
+	manifest := &(pod.Spec)
+
+	klog.V(3).Infof("Attempting to schedule pod: %v/%v/%v", pod.Tenant, pod.Namespace, pod.Name)
+
+	scheduleResultQueue := queue.New(1)
+
+	go sched.startScheduling(scheduleResultQueue, pod, tokenMap, manifest)
 }
 
 // scheduleOne does the entire scheduling workflow for a single pod.  It is serialized on the scheduling algorithm's host fitting.
 func (sched *Scheduler) scheduleOne() {
 	fwk := sched.config.Framework
 
+	// 1. Get the Pod to be scheduled from the queue
 	pod := sched.config.NextPod()
 	// pod could be nil when schedulerQueue is closed
 	if pod == nil {
@@ -459,6 +741,8 @@ func (sched *Scheduler) scheduleOne() {
 	// Synchronously attempt to find a fit for the pod.
 	start := time.Now()
 	pluginContext := framework.NewPluginContext()
+
+	// 2. Get the host name of the Pod to be scheduled
 	scheduleResult, err := sched.schedule(pod, pluginContext)
 	if err != nil {
 		// schedule() may have failed because the pod would not fit on any host, so we try to
@@ -492,6 +776,7 @@ func (sched *Scheduler) scheduleOne() {
 	metrics.DeprecatedSchedulingAlgorithmLatency.Observe(metrics.SinceInMicroseconds(start))
 	// Tell the cache to assume that a pod now is running on a given node, even though it hasn't been bound yet.
 	// This allows us to keep scheduling without waiting on binding to occur.
+	// 3. Pod and Node cache, to ensure that the scheduling has been carried out, without waiting for each binding is completed (binding is a time-consuming process)
 	assumedPod := pod.DeepCopy()
 
 	// Assume volumes first before assuming the pod.
@@ -501,6 +786,7 @@ func (sched *Scheduler) scheduleOne() {
 	// Otherwise, binding of volumes is started after the pod is assumed, but before pod binding.
 	//
 	// This function modifies 'assumedPod' if volume binding is required.
+	// 4. Determine if the VolumeScheduling feature is required
 	allBound, err := sched.assumeVolumes(assumedPod, scheduleResult.SuggestedHost)
 	if err != nil {
 		klog.Errorf("error assuming volumes: %v", err)
@@ -516,6 +802,7 @@ func (sched *Scheduler) scheduleOne() {
 	}
 
 	// assume modifies `assumedPod` by setting NodeName=scheduleResult.SuggestedHost
+	// 5. The NodeName corresponding to the Pod is written with the host name and stored in the cache
 	err = sched.assume(assumedPod, scheduleResult.SuggestedHost)
 	if err != nil {
 		klog.Errorf("error assuming pod: %v", err)
@@ -525,6 +812,7 @@ func (sched *Scheduler) scheduleOne() {
 		return
 	}
 	// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).
+	// 6. Request apiserver, asynchronously process the final binding, write to etcd
 	go func() {
 		// Bind volumes first before Pod
 		if !allBound {

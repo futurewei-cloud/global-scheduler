@@ -58,6 +58,12 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
 )
 
+// Avoid token expired in the Test functions
+var TestToken, _ = requestToken("172.31.14.23")
+
+// Global instance id for testing
+var INSTANCEID string = ""
+
 // EmptyFramework is an empty framework used in tests.
 // Note: If the test runs in goroutine, please don't use this variable to avoid a race condition.
 var EmptyFramework, _ = framework.NewFramework(EmptyPluginRegistry, nil, EmptyPluginConfig)
@@ -112,6 +118,32 @@ func podWithID(id, desiredHost string) *v1.Pod {
 		},
 		Spec: v1.PodSpec{
 			NodeName: desiredHost,
+		},
+	}
+}
+
+func podWithSpec() *v1.Pod {
+	return &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test15pod",
+		},
+		Spec: v1.PodSpec{
+			Nics: []v1.Nic{
+				{Uuid: "337f03dc-f0e0-4005-be1c-64f24bad7b2c"},
+			},
+			VirtualMachine: &v1.VirtualMachine{
+				KeyPairName: "KeyMy",
+				Name:        "provider-instance-test-15",
+				Image:       "5f2327cb-ef5c-43b5-821e-2a16b7455812",
+				Scheduling: v1.GlobalScheduling{
+					SecurityGroup: []v1.OpenStackSecurityGroup{
+						{Name: "4c71dc86-511b-470e-8cae-496bca13f2bd"},
+					},
+				},
+				Resources: v1.ResourceRequirements{
+					FlavorRef: "d1",
+				},
+			},
 		},
 	}
 }
@@ -1047,5 +1079,352 @@ priorities:
 		if !schedPrioritizers.Equal(test.expectedPrioritizers) {
 			t.Errorf("Expected priority functions %v, got %v", test.expectedPrioritizers, schedPrioritizers)
 		}
+	}
+}
+
+func TestServerCreate_SingleServerRequest(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	token := TestToken
+
+	table := []struct {
+		metadataName  string
+		nicId         string
+		keyPairName   string
+		vmName        string
+		image         string
+		securityGroup string
+		flavorRef     string
+	}{
+		{
+			metadataName:  "test15pod",
+			nicId:         "337f03dc-f0e0-4005-be1c-64f24bad7b2c",
+			keyPairName:   "KeyMy",
+			vmName:        "provider-instance-test-15",
+			image:         "5f2327cb-ef5c-43b5-821e-2a16b7455812",
+			securityGroup: "4c71dc86-511b-470e-8cae-496bca13f2bd",
+			flavorRef:     "d1",
+		},
+	}
+
+	for _, item := range table {
+		pod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: item.metadataName,
+			},
+			Spec: v1.PodSpec{
+				Nics: []v1.Nic{
+					{Uuid: item.nicId},
+				},
+				VirtualMachine: &v1.VirtualMachine{
+					KeyPairName: item.keyPairName,
+					Name:        item.vmName,
+					Image:       item.image,
+					Scheduling: v1.GlobalScheduling{
+						SecurityGroup: []v1.OpenStackSecurityGroup{
+							{Name: item.securityGroup},
+						},
+					},
+					Resources: v1.ResourceRequirements{
+						FlavorRef: item.flavorRef,
+					},
+				},
+			},
+		}
+		manifest := &(pod.Spec)
+		instanceID, err := serverCreate(result.SuggestedHost, token, manifest)
+
+		if err != nil {
+			t.Errorf("expected instance create success but fail")
+		} else {
+			INSTANCEID = instanceID
+		}
+	}
+}
+
+func TestServerCreate_SingleServerRequestWithInvalidHost(t *testing.T) {
+	// Invalid Host
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "100.31.14.23", UID: types.UID("100.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	token := TestToken
+
+	table := []struct {
+		metadataName  string
+		nicId         string
+		keyPairName   string
+		vmName        string
+		image         string
+		securityGroup string
+		flavorRef     string
+	}{
+		{
+			metadataName:  "test15pod",
+			nicId:         "337f03dc-f0e0-4005-be1c-64f24bad7b2c",
+			keyPairName:   "KeyMy",
+			vmName:        "provider-instance-test-15",
+			image:         "5f2327cb-ef5c-43b5-821e-2a16b7455812",
+			securityGroup: "4c71dc86-511b-470e-8cae-496bca13f2bd",
+			flavorRef:     "d1",
+		},
+	}
+
+	for _, item := range table {
+		pod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: item.metadataName,
+			},
+			Spec: v1.PodSpec{
+				Nics: []v1.Nic{
+					{Uuid: item.nicId},
+				},
+				VirtualMachine: &v1.VirtualMachine{
+					KeyPairName: item.keyPairName,
+					Name:        item.vmName,
+					Image:       item.image,
+					Scheduling: v1.GlobalScheduling{
+						SecurityGroup: []v1.OpenStackSecurityGroup{
+							{Name: item.securityGroup},
+						},
+					},
+					Resources: v1.ResourceRequirements{
+						FlavorRef: item.flavorRef,
+					},
+				},
+			},
+		}
+		manifest := &(pod.Spec)
+		_, err := serverCreate(result.SuggestedHost, token, manifest)
+
+		if err == nil {
+			t.Errorf("expected instance create fail but success")
+		}
+	}
+}
+
+func TestServerCreate_SingleServerRequestWithInvalidToken(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	// Invalid token array
+	token := []string{"", "ejlke-eireriu"}
+
+	table := []struct {
+		metadataName  string
+		nicId         string
+		keyPairName   string
+		vmName        string
+		image         string
+		securityGroup string
+		flavorRef     string
+	}{
+		{
+			metadataName:  "test15pod",
+			nicId:         "337f03dc-f0e0-4005-be1c-64f24bad7b2c",
+			keyPairName:   "KeyMy",
+			vmName:        "provider-instance-test-15",
+			image:         "5f2327cb-ef5c-43b5-821e-2a16b7455812",
+			securityGroup: "4c71dc86-511b-470e-8cae-496bca13f2bd",
+			flavorRef:     "d1",
+		},
+	}
+
+	for _, item := range table {
+		pod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: item.metadataName,
+			},
+			Spec: v1.PodSpec{
+				Nics: []v1.Nic{
+					{Uuid: item.nicId},
+				},
+				VirtualMachine: &v1.VirtualMachine{
+					KeyPairName: item.keyPairName,
+					Name:        item.vmName,
+					Image:       item.image,
+					Scheduling: v1.GlobalScheduling{
+						SecurityGroup: []v1.OpenStackSecurityGroup{
+							{Name: item.securityGroup},
+						},
+					},
+					Resources: v1.ResourceRequirements{
+						FlavorRef: item.flavorRef,
+					},
+				},
+			},
+		}
+		manifest := &(pod.Spec)
+		for _, tk := range token {
+			_, err := serverCreate(result.SuggestedHost, tk, manifest)
+			if err == nil {
+				t.Errorf("expected instance create fail but success")
+			}
+		}
+	}
+}
+
+func TestRequestToken_SingleRequestWithOneValidHost(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	_, err := requestToken(result.SuggestedHost)
+	if err != nil {
+		t.Errorf("excepted token request success, but fail")
+	}
+}
+
+func TestRequestToken_SingleRequestWithOneInvalidHost(t *testing.T) {
+	// Invalid Host
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "100.31.14.23", UID: types.UID("100.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	_, err := requestToken(result.SuggestedHost)
+	if err == nil {
+		t.Errorf("excepted token request fail, but success")
+	}
+}
+
+func TestRequestToken_MultipleRequestWithOneValidHost(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	// Request 1000 times
+	for i := 0; i < 1000; i++ {
+		_, err := requestToken(result.SuggestedHost)
+		if err != nil {
+			t.Errorf("excepted token request success, but fail")
+		}
+	}
+}
+
+func TestCheckInstanceStatus_ACTIVEStatus(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	instanceID := INSTANCEID
+	token := TestToken
+
+	instanceStatus, err := checkInstanceStatus(result.SuggestedHost, token, instanceID)
+	if err != nil {
+		t.Errorf("check instance status process failed")
+	} else if instanceStatus != "ACTIVE" {
+		t.Errorf("expected instance status is ACTIVE, but is %v", instanceStatus)
+	}
+}
+
+func TestCheckInstanceStatus_InvalidHost(t *testing.T) {
+	// Invalid Host
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "100.31.14.23", UID: types.UID("100.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	instanceID := INSTANCEID
+	token := TestToken
+
+	_, err := checkInstanceStatus(result.SuggestedHost, token, instanceID)
+	if err == nil {
+		t.Errorf("expected instance status check failed but success")
+	}
+}
+
+func TestCheckInstanceStatus_InvalidInstanceID(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	// Invalid instanceID array
+	instanceID := []string{"efewer-23sdf", ""}
+	token := TestToken
+
+	for _, id := range instanceID {
+		_, err := checkInstanceStatus(result.SuggestedHost, token, id)
+		if err == nil {
+			t.Errorf("expected instance status check failed but success")
+		}
+	}
+}
+
+func TestCheckInstanceStatus_InvalidToken(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	instanceID := INSTANCEID
+	// Invalid token array
+	token := []string{"aasoijdoijw-sdofisu", ""}
+
+	for _, tk := range token {
+		_, err := checkInstanceStatus(result.SuggestedHost, tk, instanceID)
+		if err == nil {
+			t.Errorf("expected instance status check failed but success")
+		}
+	}
+}
+
+func TestDeleteInstance_SingleRequest(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	token := TestToken
+	// Make sure this instanceID exist when testing delete instance request
+	instanceID := INSTANCEID
+
+	err := deleteInstance(result.SuggestedHost, token, instanceID)
+	if err != nil {
+		t.Errorf("expected instance delete success but fail")
+	}
+}
+
+func TestDeleteInstance_SingleRequestWithInvalidHost(t *testing.T) {
+	// Invalid Host
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "100.31.14.23", UID: types.UID("100.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	token := TestToken
+	// Make sure this instanceID exist when testing delete instance request
+	instanceID := INSTANCEID
+
+	err := deleteInstance(result.SuggestedHost, token, instanceID)
+	if err == nil {
+		t.Errorf("expected instance delete fail but success")
+	}
+}
+
+func TestDeleteInstance_SingleRequestWithInvalidToken(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	// Invalid token array
+	token := []string{"", "sadasda-wewjkejwke"}
+	// Make sure this instanceID exist when testing delete instance request
+	instanceID := INSTANCEID
+
+	for _, tk := range token {
+		err := deleteInstance(result.SuggestedHost, tk, instanceID)
+		if err == nil {
+			t.Errorf("expected instance delete fail but success")
+		}
+	}
+}
+
+func TestDeleteInstance_SingleRequestWithInvalidInstanceID(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	token := TestToken
+	// Invalid instanceID array
+	instanceID := []string{"", "saksjdh-23asd"}
+
+	for _, instance_id := range instanceID {
+		err := deleteInstance(result.SuggestedHost, token, instance_id)
+		if err == nil {
+			t.Errorf("expected instance delete fail but success")
+		}
+	}
+}
+
+func TestTokenExpired_SingleRequestWithUnexpiredToken(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	// New token
+	token := TestToken
+
+	if tokenExpired(result.SuggestedHost, token) {
+		t.Errorf("expected token not expired but expired")
+	}
+}
+
+func TestTokenExpired_SingleRequestWithExpiredToken(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	// Expired token
+	token := "ousoidfoisufoiu--ero2o3i23unsd-3343kjhjkhkj"
+
+	if !tokenExpired(result.SuggestedHost, token) {
+		t.Errorf("expected token expired but not expired")
 	}
 }

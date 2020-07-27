@@ -21,12 +21,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/golang-collections/go-datastructures/queue"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
-	// TODO: Try to find an official way to import this module
-	"github.com/golang-collections/go-datastructures/queue"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"

@@ -11,7 +11,7 @@ place workloads on the best DC or edge site based on traffic patterns and global
 It is evolved from the open source [Kubernetes](https://github.com/kubernetes/kubernetesh) v1.15 codebase
 with some fundamental improvements.
 
-Arktos aims to address key scheduling challenges of compute units (e.g. VM and containers) across
+Global Scheduler aims to address key scheduling challenges of compute units (e.g. VM and containers) across
 a large number of DC clouds and edge clouds---system scalability, resource sharing, resource efficiency, 
 scheduling rate/latency, application-performance-aware scheduling, etc.  
 

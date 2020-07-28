@@ -1280,18 +1280,6 @@ func TestRequestToken_SingleRequestWithOneInvalidHost(t *testing.T) {
 	}
 }
 
-func TestRequestToken_MultipleRequestWithOneValidHost(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
-	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
-	// Request 1000 times
-	for i := 0; i < 1000; i++ {
-		_, err := requestToken(result.SuggestedHost)
-		if err != nil {
-			t.Errorf("excepted token request success, but fail")
-		}
-	}
-}
-
 func TestCheckInstanceStatus_ACTIVEStatus(t *testing.T) {
 	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}

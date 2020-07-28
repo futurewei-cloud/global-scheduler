@@ -26,7 +26,8 @@ import (
 	"os"
 	"time"
 	// TODO: Try to find an official way to import this module
-	"github.com/golang-collections/go-datastructures/queue"
+	// "github.com/golang-collections/go-datastructures/queue"
+	internalqueue "k8s.io/kubernetes/pkg/scheduler/internal/queue"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
@@ -60,6 +61,8 @@ const (
 
 // Global variable storing token which avoid generating token every time
 var tokenMap = make(map[string]string)
+
+var scheduleResultQueue = internalqueue.New(1)
 
 // Scheduler watches for new unscheduled pods. It attempts to find
 // nodes that they fit on and writes bindings back to the api server.
@@ -618,7 +621,7 @@ func tokenExpired(host string, authToken string) bool {
 	return false
 }
 
-func (sched *Scheduler) scheduleInstanceStatusCheck(host string, authToken string, instanceID string, pod *v1.Pod, scheduleResultQueue *queue.Queue, manifest *v1.PodSpec) {
+func (sched *Scheduler) scheduleInstanceStatusCheck(host string, authToken string, instanceID string, pod *v1.Pod, scheduleResultQueue *internalqueue.Queue, manifest *v1.PodSpec) {
 	instanceStatus, err := checkInstanceStatus(host, authToken, instanceID)
 	if err != nil {
 		return
@@ -661,11 +664,11 @@ func (sched *Scheduler) scheduleInstanceStatusCheck(host string, authToken strin
 	}
 }
 
-func scheduleResultEnqueue(scheduleResultQueue *queue.Queue, scheduleResult core.ScheduleResult) {
+func scheduleResultEnqueue(scheduleResultQueue *internalqueue.Queue, scheduleResult core.ScheduleResult) {
 	scheduleResultQueue.Put(scheduleResult.SuggestedHost)
 }
 
-func (sched *Scheduler) scheduleResultDequeue(scheduleResultQueue *queue.Queue, tokenMap map[string]string, manifest *v1.PodSpec, pod *v1.Pod) {
+func (sched *Scheduler) scheduleResultDequeue(scheduleResultQueue *internalqueue.Queue, tokenMap map[string]string, manifest *v1.PodSpec, pod *v1.Pod) {
 	res, _ := scheduleResultQueue.Get(1)
 	host := fmt.Sprintf("%v", res[0])
 
@@ -692,7 +695,7 @@ func (sched *Scheduler) scheduleResultDequeue(scheduleResultQueue *queue.Queue, 
 	go sched.scheduleInstanceStatusCheck(host, authToken, instanceID, pod, scheduleResultQueue, manifest)
 }
 
-func (sched *Scheduler) startScheduling(scheduleResultQueue *queue.Queue, pod *v1.Pod, tokenMap map[string]string, manifest *v1.PodSpec) {
+func (sched *Scheduler) startScheduling(scheduleResultQueue *internalqueue.Queue, pod *v1.Pod, tokenMap map[string]string, manifest *v1.PodSpec) {
 	scheduleResult, _ := sched.globalSchedule(pod)
 	go scheduleResultEnqueue(scheduleResultQueue, scheduleResult)
 	go sched.scheduleResultDequeue(scheduleResultQueue, tokenMap, manifest, pod)
@@ -714,8 +717,6 @@ func (sched *Scheduler) globalScheduleOne() {
 	manifest := &(pod.Spec)
 
 	klog.V(3).Infof("Attempting to schedule pod: %v/%v/%v", pod.Tenant, pod.Namespace, pod.Name)
-
-	scheduleResultQueue := queue.New(1)
 
 	go sched.startScheduling(scheduleResultQueue, pod, tokenMap, manifest)
 }

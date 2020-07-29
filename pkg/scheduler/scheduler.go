@@ -59,9 +59,10 @@ const (
 	SchedulerError = "SchedulerError"
 )
 
-// Global variable storing token which avoid generating token every time
+// Global token map storing token which avoid generating token every time
 var tokenMap = make(map[string]string)
 
+// Global queue storing unscheduled pod
 var scheduleResultQueue = internalqueue.New(1)
 
 // Scheduler watches for new unscheduled pods. It attempts to find

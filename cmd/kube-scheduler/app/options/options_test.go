@@ -576,12 +576,6 @@ users:
 				t.Error(err)
 				return
 			}
-			// Kind: Config is not under testing consideration
-			// Comment out in order to pass bazel-test
-
-			// if username != tc.expectedUsername {
-			// 	t.Errorf("expected server call with user %s, got %s", tc.expectedUsername, username)
-			// }
 		})
 	}
 }

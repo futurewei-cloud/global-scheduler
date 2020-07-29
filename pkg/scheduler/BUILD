@@ -43,6 +43,7 @@ go_library(
 
 go_test(
     name = "go_default_test",
+    timeout = "long",
     srcs = [
         "eventhandlers_test.go",
         "scheduler_test.go",

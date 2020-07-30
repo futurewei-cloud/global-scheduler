@@ -1104,7 +1104,7 @@ func TestRequestToken_SingleRequestWithOneInvalidHost(t *testing.T) {
 }
 
 func TestServerCreate_SingleServerRequest(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "52.24.61.210", UID: types.UID("52.24.61.210")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
 	token := TEST_TOKEN
 
@@ -1226,7 +1226,7 @@ func TestServerCreate_SingleServerRequestWithInvalidHost(t *testing.T) {
 }
 
 func TestServerCreate_SingleServerRequestWithInvalidToken(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "52.24.61.210", UID: types.UID("52.24.61.210")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
 	// Invalid token array
 	token := []string{"", "ejlke-eireriu"}
@@ -1286,7 +1286,7 @@ func TestServerCreate_SingleServerRequestWithInvalidToken(t *testing.T) {
 }
 
 func TestCheckInstanceStatus_ACTIVEStatus(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "52.24.61.210", UID: types.UID("52.24.61.210")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
 	instanceID := TEST_INSTANCE_ID
 	token := TEST_TOKEN
@@ -1313,7 +1313,7 @@ func TestCheckInstanceStatus_InvalidHost(t *testing.T) {
 }
 
 func TestCheckInstanceStatus_InvalidInstanceID(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "52.24.61.210", UID: types.UID("52.24.61.210")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
 	// Invalid instanceID array
 	instanceID := []string{"efewer-23sdf", ""}
@@ -1328,7 +1328,7 @@ func TestCheckInstanceStatus_InvalidInstanceID(t *testing.T) {
 }
 
 func TestCheckInstanceStatus_InvalidToken(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "52.24.61.210", UID: types.UID("52.24.61.210")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
 	instanceID := TEST_INSTANCE_ID
 	// Invalid token array
@@ -1343,7 +1343,7 @@ func TestCheckInstanceStatus_InvalidToken(t *testing.T) {
 }
 
 func TestDeleteInstance_SingleRequest(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "52.24.61.210", UID: types.UID("52.24.61.210")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
 	token := TEST_TOKEN
 	// Make sure this instanceID exist when testing delete instance request
@@ -1370,7 +1370,7 @@ func TestDeleteInstance_SingleRequestWithInvalidHost(t *testing.T) {
 }
 
 func TestDeleteInstance_SingleRequestWithInvalidToken(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "52.24.61.210", UID: types.UID("52.24.61.210")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
 	// Invalid token array
 	token := []string{"", "sadasda-wewjkejwke"}
@@ -1386,7 +1386,7 @@ func TestDeleteInstance_SingleRequestWithInvalidToken(t *testing.T) {
 }
 
 func TestDeleteInstance_SingleRequestWithInvalidInstanceID(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "52.24.61.210", UID: types.UID("52.24.61.210")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
 	token := TEST_TOKEN
 	// Invalid instanceID array
@@ -1401,7 +1401,7 @@ func TestDeleteInstance_SingleRequestWithInvalidInstanceID(t *testing.T) {
 }
 
 func TESTTOKENExpired_SingleRequestWithUnexpiredToken(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "52.24.61.210", UID: types.UID("52.24.61.210")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
 	// New token
 	token := TEST_TOKEN
@@ -1412,7 +1412,7 @@ func TESTTOKENExpired_SingleRequestWithUnexpiredToken(t *testing.T) {
 }
 
 func TESTTOKENExpired_SingleRequestWithExpiredToken(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "52.24.61.210", UID: types.UID("52.24.61.210")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
 	// Expired token
 	token := "ousoidfoisufoiu--ero2o3i23unsd-3343kjhjkhkj"

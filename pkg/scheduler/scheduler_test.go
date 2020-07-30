@@ -1265,7 +1265,7 @@ priorities:
 // }
 
 func TestRequestToken_SingleRequestWithOneValidHost(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "52.24.61.210", UID: types.UID("52.24.61.210")}}
 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
 	_, err := requestToken(result.SuggestedHost)
 	if err != nil {

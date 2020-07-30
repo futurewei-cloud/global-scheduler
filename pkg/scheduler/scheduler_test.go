@@ -1132,10 +1132,13 @@ func TestServerCreate_SingleServerRequest(t *testing.T) {
 			},
 		}
 		manifest := &(pod.Spec)
+		t.Logf("Host = %s", result.SuggestedHost)
+		t.Logf("Token = %s", token)
+		t.Logf("Manifest = %v", manifest)
 		instanceID, err := serverCreate(result.SuggestedHost, token, manifest)
 
 		if err != nil {
-			t.Errorf("expected instance create success but fail")
+			t.Errorf("expected instance create success but fail: %v", err)
 		} else {
 			INSTANCEID = instanceID
 		}

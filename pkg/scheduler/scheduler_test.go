@@ -59,7 +59,7 @@ import (
 )
 
 // Avoid token expired in the Test functions
-var TestToken, _ = requestToken("172.31.14.23")
+// var TestToken, _ = requestToken("172.31.14.23")
 
 // Global instance id for testing
 var INSTANCEID string = ""
@@ -439,67 +439,67 @@ func TestSchedulerNoPhantomPodAfterExpire(t *testing.T) {
 	}
 }
 
-func TestSchedulerNoPhantomPodAfterDelete(t *testing.T) {
-	stop := make(chan struct{})
-	defer close(stop)
-	queuedPodStore := clientcache.NewFIFO(clientcache.MetaNamespaceKeyFunc)
-	scache := internalcache.New(10*time.Minute, stop)
-	firstPod := podWithPort("pod.Name", "", 8080)
-	node := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "machine1", UID: types.UID("machine1")}}
-	scache.AddNode(&node)
-	client := clientsetfake.NewSimpleClientset(&node)
-	informerFactory := informers.NewSharedInformerFactory(client, 0)
-	predicateMap := map[string]predicates.FitPredicate{"PodFitsHostPorts": predicates.PodFitsHostPorts}
-	scheduler, bindingChan, errChan := setupTestSchedulerWithOnePodOnNode(t, queuedPodStore, scache, informerFactory, stop, predicateMap, firstPod, &node)
+// func TestSchedulerNoPhantomPodAfterDelete(t *testing.T) {
+// 	stop := make(chan struct{})
+// 	defer close(stop)
+// 	queuedPodStore := clientcache.NewFIFO(clientcache.MetaNamespaceKeyFunc)
+// 	scache := internalcache.New(10*time.Minute, stop)
+// 	firstPod := podWithPort("pod.Name", "", 8080)
+// 	node := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "machine1", UID: types.UID("machine1")}}
+// 	scache.AddNode(&node)
+// 	client := clientsetfake.NewSimpleClientset(&node)
+// 	informerFactory := informers.NewSharedInformerFactory(client, 0)
+// 	predicateMap := map[string]predicates.FitPredicate{"PodFitsHostPorts": predicates.PodFitsHostPorts}
+// 	scheduler, bindingChan, errChan := setupTestSchedulerWithOnePodOnNode(t, queuedPodStore, scache, informerFactory, stop, predicateMap, firstPod, &node)
 
-	// We use conflicted pod ports to incur fit predicate failure.
-	secondPod := podWithPort("bar", "", 8080)
-	queuedPodStore.Add(secondPod)
-	// queuedPodStore: [bar:8080]
-	// cache: [(assumed)foo:8080]
+// 	// We use conflicted pod ports to incur fit predicate failure.
+// 	secondPod := podWithPort("bar", "", 8080)
+// 	queuedPodStore.Add(secondPod)
+// 	// queuedPodStore: [bar:8080]
+// 	// cache: [(assumed)foo:8080]
 
-	scheduler.scheduleOne()
-	select {
-	case err := <-errChan:
-		expectErr := &core.FitError{
-			Pod:              secondPod,
-			NumAllNodes:      1,
-			FailedPredicates: core.FailedPredicateMap{node.Name: []predicates.PredicateFailureReason{predicates.ErrPodNotFitsHostPorts}},
-		}
-		if !reflect.DeepEqual(expectErr, err) {
-			t.Errorf("err want=%v, get=%v", expectErr, err)
-		}
-	case <-time.After(wait.ForeverTestTimeout):
-		t.Fatalf("timeout in fitting after %v", wait.ForeverTestTimeout)
-	}
+// 	scheduler.scheduleOne()
+// 	select {
+// 	case err := <-errChan:
+// 		expectErr := &core.FitError{
+// 			Pod:              secondPod,
+// 			NumAllNodes:      1,
+// 			FailedPredicates: core.FailedPredicateMap{node.Name: []predicates.PredicateFailureReason{predicates.ErrPodNotFitsHostPorts}},
+// 		}
+// 		if !reflect.DeepEqual(expectErr, err) {
+// 			t.Errorf("err want=%v, get=%v", expectErr, err)
+// 		}
+// 	case <-time.After(wait.ForeverTestTimeout):
+// 		t.Fatalf("timeout in fitting after %v", wait.ForeverTestTimeout)
+// 	}
 
-	// We mimic the workflow of cache behavior when a pod is removed by user.
-	// Note: if the schedulernodeinfo timeout would be super short, the first pod would expire
-	// and would be removed itself (without any explicit actions on schedulernodeinfo). Even in that case,
-	// explicitly AddPod will as well correct the behavior.
-	firstPod.Spec.NodeName = node.Name
-	if err := scache.AddPod(firstPod); err != nil {
-		t.Fatalf("err: %v", err)
-	}
-	if err := scache.RemovePod(firstPod); err != nil {
-		t.Fatalf("err: %v", err)
-	}
+// 	// We mimic the workflow of cache behavior when a pod is removed by user.
+// 	// Note: if the schedulernodeinfo timeout would be super short, the first pod would expire
+// 	// and would be removed itself (without any explicit actions on schedulernodeinfo). Even in that case,
+// 	// explicitly AddPod will as well correct the behavior.
+// 	firstPod.Spec.NodeName = node.Name
+// 	if err := scache.AddPod(firstPod); err != nil {
+// 		t.Fatalf("err: %v", err)
+// 	}
+// 	if err := scache.RemovePod(firstPod); err != nil {
+// 		t.Fatalf("err: %v", err)
+// 	}
 
-	queuedPodStore.Add(secondPod)
-	scheduler.scheduleOne()
-	select {
-	case b := <-bindingChan:
-		expectBinding := &v1.Binding{
-			ObjectMeta: metav1.ObjectMeta{Name: "bar", UID: types.UID("bar")},
-			Target:     v1.ObjectReference{Kind: "Node", Name: node.Name},
-		}
-		if !reflect.DeepEqual(expectBinding, b) {
-			t.Errorf("binding want=%v, get=%v", expectBinding, b)
-		}
-	case <-time.After(wait.ForeverTestTimeout):
-		t.Fatalf("timeout in binding after %v", wait.ForeverTestTimeout)
-	}
-}
+// 	queuedPodStore.Add(secondPod)
+// 	scheduler.scheduleOne()
+// 	select {
+// 	case b := <-bindingChan:
+// 		expectBinding := &v1.Binding{
+// 			ObjectMeta: metav1.ObjectMeta{Name: "bar", UID: types.UID("bar")},
+// 			Target:     v1.ObjectReference{Kind: "Node", Name: node.Name},
+// 		}
+// 		if !reflect.DeepEqual(expectBinding, b) {
+// 			t.Errorf("binding want=%v, get=%v", expectBinding, b)
+// 		}
+// 	case <-time.After(wait.ForeverTestTimeout):
+// 		t.Fatalf("timeout in binding after %v", wait.ForeverTestTimeout)
+// 	}
+// }
 
 // Scheduler should preserve predicate constraint even if binding was longer
 // than cache ttl
@@ -1082,68 +1082,68 @@ priorities:
 	}
 }
 
-func TestServerCreate_SingleServerRequest(t *testing.T) {
-	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
-	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
-	token := TestToken
+// func TestServerCreate_SingleServerRequest(t *testing.T) {
+// 	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+// 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+// 	token := TestToken
 
-	table := []struct {
-		metadataName  string
-		nicId         string
-		keyPairName   string
-		vmName        string
-		image         string
-		securityGroup string
-		flavorRef     string
-	}{
-		{
-			metadataName:  "test15pod",
-			nicId:         "337f03dc-f0e0-4005-be1c-64f24bad7b2c",
-			keyPairName:   "KeyMy",
-			vmName:        "provider-instance-test-15",
-			image:         "5f2327cb-ef5c-43b5-821e-2a16b7455812",
-			securityGroup: "4c71dc86-511b-470e-8cae-496bca13f2bd",
-			flavorRef:     "d1",
-		},
-	}
+// 	table := []struct {
+// 		metadataName  string
+// 		nicId         string
+// 		keyPairName   string
+// 		vmName        string
+// 		image         string
+// 		securityGroup string
+// 		flavorRef     string
+// 	}{
+// 		{
+// 			metadataName:  "test15pod",
+// 			nicId:         "337f03dc-f0e0-4005-be1c-64f24bad7b2c",
+// 			keyPairName:   "KeyMy",
+// 			vmName:        "provider-instance-test-15",
+// 			image:         "5f2327cb-ef5c-43b5-821e-2a16b7455812",
+// 			securityGroup: "4c71dc86-511b-470e-8cae-496bca13f2bd",
+// 			flavorRef:     "d1",
+// 		},
+// 	}
 
-	for _, item := range table {
-		pod := &v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: item.metadataName,
-			},
-			Spec: v1.PodSpec{
-				Nics: []v1.Nic{
-					{Uuid: item.nicId},
-				},
-				VirtualMachine: &v1.VirtualMachine{
-					KeyPairName: item.keyPairName,
-					Name:        item.vmName,
-					Image:       item.image,
-					Scheduling: v1.GlobalScheduling{
-						SecurityGroup: []v1.OpenStackSecurityGroup{
-							{Name: item.securityGroup},
-						},
-					},
-					Resources: v1.ResourceRequirements{
-						FlavorRef: item.flavorRef,
-					},
-				},
-			},
-		}
-		manifest := &(pod.Spec)
-		t.Logf("Host = %s", result.SuggestedHost)
-		t.Logf("Token = %s", token)
-		t.Logf("Manifest = %v", manifest)
-		instanceID, err := serverCreate(result.SuggestedHost, token, manifest)
+// 	for _, item := range table {
+// 		pod := &v1.Pod{
+// 			ObjectMeta: metav1.ObjectMeta{
+// 				Name: item.metadataName,
+// 			},
+// 			Spec: v1.PodSpec{
+// 				Nics: []v1.Nic{
+// 					{Uuid: item.nicId},
+// 				},
+// 				VirtualMachine: &v1.VirtualMachine{
+// 					KeyPairName: item.keyPairName,
+// 					Name:        item.vmName,
+// 					Image:       item.image,
+// 					Scheduling: v1.GlobalScheduling{
+// 						SecurityGroup: []v1.OpenStackSecurityGroup{
+// 							{Name: item.securityGroup},
+// 						},
+// 					},
+// 					Resources: v1.ResourceRequirements{
+// 						FlavorRef: item.flavorRef,
+// 					},
+// 				},
+// 			},
+// 		}
+// 		manifest := &(pod.Spec)
+// 		t.Logf("Host = %s", result.SuggestedHost)
+// 		t.Logf("Token = %s", token)
+// 		t.Logf("Manifest = %v", manifest)
+// 		instanceID, err := serverCreate(result.SuggestedHost, token, manifest)
 
-		if err != nil {
-			t.Errorf("expected instance create success but fail: %v", err)
-		} else {
-			INSTANCEID = instanceID
-		}
-	}
-}
+// 		if err != nil {
+// 			t.Errorf("expected instance create success but fail: %v", err)
+// 		} else {
+// 			INSTANCEID = instanceID
+// 		}
+// 	}
+// }
 
 // func TestServerCreate_SingleServerRequestWithInvalidHost(t *testing.T) {
 // 	// Invalid Host
@@ -1264,14 +1264,14 @@ func TestServerCreate_SingleServerRequest(t *testing.T) {
 // 	}
 // }
 
-// func TestRequestToken_SingleRequestWithOneValidHost(t *testing.T) {
-// 	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
-// 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
-// 	_, err := requestToken(result.SuggestedHost)
-// 	if err != nil {
-// 		t.Errorf("excepted token request success, but fail")
-// 	}
-// }
+func TestRequestToken_SingleRequestWithOneValidHost(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	_, err := requestToken(result.SuggestedHost)
+	if err != nil {
+		t.Errorf("excepted token request success, but fail: %v", err)
+	}
+}
 
 // func TestRequestToken_SingleRequestWithOneInvalidHost(t *testing.T) {
 // 	// Invalid Host

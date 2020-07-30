@@ -1082,65 +1082,65 @@ priorities:
 	}
 }
 
-// func TestServerCreate_SingleServerRequest(t *testing.T) {
-// 	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
-// 	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
-// 	token := TestToken
+func TestServerCreate_SingleServerRequest(t *testing.T) {
+	testNode := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "172.31.14.23", UID: types.UID("172.31.14.23")}}
+	result := core.ScheduleResult{SuggestedHost: testNode.Name, EvaluatedNodes: 5, FeasibleNodes: 5}
+	token := TestToken
 
-// 	table := []struct {
-// 		metadataName  string
-// 		nicId         string
-// 		keyPairName   string
-// 		vmName        string
-// 		image         string
-// 		securityGroup string
-// 		flavorRef     string
-// 	}{
-// 		{
-// 			metadataName:  "test15pod",
-// 			nicId:         "337f03dc-f0e0-4005-be1c-64f24bad7b2c",
-// 			keyPairName:   "KeyMy",
-// 			vmName:        "provider-instance-test-15",
-// 			image:         "5f2327cb-ef5c-43b5-821e-2a16b7455812",
-// 			securityGroup: "4c71dc86-511b-470e-8cae-496bca13f2bd",
-// 			flavorRef:     "d1",
-// 		},
-// 	}
+	table := []struct {
+		metadataName  string
+		nicId         string
+		keyPairName   string
+		vmName        string
+		image         string
+		securityGroup string
+		flavorRef     string
+	}{
+		{
+			metadataName:  "test15pod",
+			nicId:         "337f03dc-f0e0-4005-be1c-64f24bad7b2c",
+			keyPairName:   "KeyMy",
+			vmName:        "provider-instance-test-15",
+			image:         "5f2327cb-ef5c-43b5-821e-2a16b7455812",
+			securityGroup: "4c71dc86-511b-470e-8cae-496bca13f2bd",
+			flavorRef:     "d1",
+		},
+	}
 
-// 	for _, item := range table {
-// 		pod := &v1.Pod{
-// 			ObjectMeta: metav1.ObjectMeta{
-// 				Name: item.metadataName,
-// 			},
-// 			Spec: v1.PodSpec{
-// 				Nics: []v1.Nic{
-// 					{Uuid: item.nicId},
-// 				},
-// 				VirtualMachine: &v1.VirtualMachine{
-// 					KeyPairName: item.keyPairName,
-// 					Name:        item.vmName,
-// 					Image:       item.image,
-// 					Scheduling: v1.GlobalScheduling{
-// 						SecurityGroup: []v1.OpenStackSecurityGroup{
-// 							{Name: item.securityGroup},
-// 						},
-// 					},
-// 					Resources: v1.ResourceRequirements{
-// 						FlavorRef: item.flavorRef,
-// 					},
-// 				},
-// 			},
-// 		}
-// 		manifest := &(pod.Spec)
-// 		instanceID, err := serverCreate(result.SuggestedHost, token, manifest)
+	for _, item := range table {
+		pod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: item.metadataName,
+			},
+			Spec: v1.PodSpec{
+				Nics: []v1.Nic{
+					{Uuid: item.nicId},
+				},
+				VirtualMachine: &v1.VirtualMachine{
+					KeyPairName: item.keyPairName,
+					Name:        item.vmName,
+					Image:       item.image,
+					Scheduling: v1.GlobalScheduling{
+						SecurityGroup: []v1.OpenStackSecurityGroup{
+							{Name: item.securityGroup},
+						},
+					},
+					Resources: v1.ResourceRequirements{
+						FlavorRef: item.flavorRef,
+					},
+				},
+			},
+		}
+		manifest := &(pod.Spec)
+		instanceID, err := serverCreate(result.SuggestedHost, token, manifest)
 
-// 		if err != nil {
-// 			t.Errorf("expected instance create success but fail")
-// 		} else {
-// 			INSTANCEID = instanceID
-// 		}
-// 	}
-// }
+		if err != nil {
+			t.Errorf("expected instance create success but fail")
+		} else {
+			INSTANCEID = instanceID
+		}
+	}
+}
 
 // func TestServerCreate_SingleServerRequestWithInvalidHost(t *testing.T) {
 // 	// Invalid Host

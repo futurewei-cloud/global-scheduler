@@ -182,7 +182,7 @@ func (g *genericScheduler) snapshot() error {
 
 func (g *genericScheduler) GlobalSchedule(pod *v1.Pod) (result ScheduleResult, err error) {
 	return ScheduleResult{
-		SuggestedHost:  "52.24.61.210",
+		SuggestedHost:  "52.24.61.210", // make sure it is public ip address
 		EvaluatedNodes: 5,
 		FeasibleNodes:  5,
 	}, err

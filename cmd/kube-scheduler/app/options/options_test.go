@@ -576,9 +576,6 @@ users:
 				t.Error(err)
 				return
 			}
-			if username != tc.expectedUsername {
-				t.Errorf("expected server call with user %s, got %s", tc.expectedUsername, username)
-			}
 		})
 	}
 }
